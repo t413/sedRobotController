@@ -50,6 +50,8 @@ SRC =	main.c \
 	interrupt_timer.c \
 	analog.c \
 	usb_debug_only.c \
+	spi.c \
+	nrf24l01.c \
 	print.c 
 
 # MCU name, you MUST set this to match the board you are using

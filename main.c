@@ -8,6 +8,8 @@
 #include "print.h"
 #include "analog.h"
 #include "interrupt_timer.h"
+#include "spi.h"
+#include "nrf24l01.h"
 
 #define LED_ON		(PORTD |= (1<<6))
 #define LED_OFF		(PORTD &= ~(1<<6))
@@ -17,7 +19,6 @@
 #define CPU_PRESCALE(n)	(CLKPR = 0x80, CLKPR = (n))
 void write_motor(uint8_t motor, int16_t val);
 int16_t limit(int16_t in, int16_t min, int16_t max);
-//#abs(x) ((x<0)? (-x):(x))
 
 struct servoMotion {
     uint16_t pid_goal_pos; //actual current position for PID to achieve
@@ -38,6 +39,7 @@ int main(void) {
 	usb_init();
 	pwm_init();
     timer0_init();
+    init_spi();
     analogReference(ADC_REF_EXTERNAL);
     
     //for H-Bridge control lines: 
@@ -84,11 +86,16 @@ int main(void) {
                 int16_t b = (svo[m].prev_pos); //begining val
                 int16_t c = ((signed)svo[m].final_pos - (signed)svo[m].prev_pos); //requested change in val
                 //--PATH OPTIONS--
-                //svo[m].pid_goal_pos = ((c*t)/(float)d + b);//linear path
-                //if ((t/=d/2) < 1) { svo[m].pid_goal_pos = c/2*t*t + b; } //quadratic easing
-                //else { svo[m].pid_goal_pos = -c/2 * ((--t)*(t-2) - 1) + b; } //quadratic easing
-                if ((t/=d/2) < 1) { svo[m].pid_goal_pos = c/2*t*t*t + b; } //cubic easing
-                else { svo[m].pid_goal_pos = c/2*((t-=2)*t*t + 2) + b; } //cubic easing
+                /*
+                 //linear path:
+                svo[m].pid_goal_pos = ((c*t)/(float)d + b);
+                //quadratic easing:
+                if ((t/=d/2) < 1) { svo[m].pid_goal_pos = c/2*t*t + b; } 
+                else { svo[m].pid_goal_pos = -c/2 * ((--t)*(t-2) - 1) + b; }
+                 */
+                //cubic easing
+                if ((t/=d/2) < 1) { svo[m].pid_goal_pos = c/2*t*t*t + b; } 
+                else { svo[m].pid_goal_pos = c/2*((t-=2)*t*t + 2) + b; }
             }
             
             //PID control
@@ -144,3 +151,8 @@ int16_t limit (int16_t in_val, int16_t min, int16_t max) {
     else if (in_val < min) return min;
     else return in_val;
 }
+
+
+    
+
+
