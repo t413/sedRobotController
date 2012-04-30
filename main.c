@@ -14,12 +14,14 @@
 #define LED_ON		(PORTD |= (1<<6))
 #define LED_OFF		(PORTD &= ~(1<<6))
 #define LED_TOGGLE	(PORTD ^= (1<<6))
-#define FakePWM0(port,pin,val,period,incrcng_cntr) (port = ((incrcng_cntr %(period))>(val)) ? (port|(1<<(pin))) : (port&~(1<<(pin))))
 
 #define LED_CONFIG	(DDRD |= (1<<6))
 #define CPU_PRESCALE(n)	(CLKPR = 0x80, CLKPR = (n))
 void write_motor(uint8_t motor, int16_t val);
 int16_t limit(int16_t in, int16_t min, int16_t max);
+void fakePWM(volatile uint8_t* port, const uint8_t pin_mask, const uint16_t val, const uint16_t period, const uint32_t incrcng_cntr);
+void fadingLED( const uint32_t current_time, const uint8_t clock_scale, const uint8_t pwm_steps, volatile uint8_t* port, const const uint8_t pin_mask, const uint32_t incrcng_cntr);
+
 
 struct servoMotion {
     uint16_t pid_goal_pos; //actual current position for PID to achieve
@@ -66,12 +68,11 @@ int main(void) {
     for (uint8_t m = 0; m < 6; m++) {  //loop through each svo instance and initialize it.
         svo[m].pid_goal_pos = svo[m].final_pos = svo[m].prev_pos = analogRead(m);
         svo[m].i_error = svo[m].pos_rqst_time = svo[m].last_val = svo[m].move_duration =  0;
-        svo[m].p = 20; svo[m].i = 2;
+        svo[m].p = 13; svo[m].i = 1.8;
     } 
 
 	uint32_t lastCntl = 0, lastPrint = 0, lastMove = 4000;
     enum modes mode = POSITION;
-    uint8_t adj_servo = 0;
 	while (1) {
         uint32_t t_tics = tics();
         uint32_t current = t_tics >> 11; //better than dividing by 2000 to get ms
@@ -79,7 +80,7 @@ int main(void) {
         //periodic position requesting
         if ((current - lastMove) > 500) {
             for (uint8_t m = 0; m < 6; m++) { 
-                if (m==0 && (mode == POSITION)) { continue; }
+                //if (m==0 && (mode == POSITION)) { continue; }
                 if (current > (svo[m].pos_rqst_time + svo[m].move_duration + rand()%1000)) {
                     uint16_t dt = rand()%6000 + 1000 + 2*abs(svo[m].final_pos - svo[m].prev_pos);//transition duration
                     newPosition(rand()%850 + 100, dt, &(svo[m]), current);
@@ -100,7 +101,7 @@ int main(void) {
                 //--PATH OPTIONS--
                 /*
                  //linear path:
-                svo[m].pid_goal_pos = ((c*t)/(float)d + b);
+                svo[m].pid _goal_pos = ((c*t)/(float)d + b);
                 //quadratic easing:
                 if ((t/=d/2) < 1) { svo[m].pid_goal_pos = c/2*t*t + b; } 
                 else { svo[m].pid_goal_pos = -c/2 * ((--t)*(t-2) - 1) + b; }
@@ -134,13 +135,10 @@ int main(void) {
             lastPrint = current;
         }
         
+        
         //fancy LED output
-        {
-        #define pwm_steps 20
-        uint8_t led_clk_scl = 4-mode;
-        if (((current >> led_clk_scl)/pwm_steps)%2) FakePWM0(PORTD,6,(((current >> led_clk_scl))%pwm_steps),pwm_steps,t_tics); //fade in
-        else FakePWM0(PORTD,6,pwm_steps-(((current >> led_clk_scl))%pwm_steps),pwm_steps,t_tics); //fade out
-        }
+        fadingLED( current, (4-mode), (20), &PORTD, (1<<6), t_tics);
+        
         
         //Nordic fob read
         if (!(PINE & (1<<6))) { //check Nordic module for data
@@ -217,6 +215,38 @@ int16_t limit (int16_t in_val, int16_t min, int16_t max) {
     else if (in_val < min) return min;
     else return in_val;
 }
+
+
+void fakePWM(volatile uint8_t* port, const uint8_t pin_mask, const uint16_t val, const uint16_t period, const uint32_t incrcng_cntr) {
+    if ((incrcng_cntr %(period))>(val)) {
+        *port |= pin_mask;
+    } else {
+        *port &= ~pin_mask;
+    }
+}
+
+
+void fadingLED(
+               const uint32_t current_time, //time in milliseconds
+               const uint8_t clock_scale,   //scale down factor, larger == slower fade
+               const uint8_t pwm_steps,     //more steps = nicer fade IF called often
+               volatile uint8_t* port,//something like (&PORTA)
+               const const uint8_t pin_mask,//which pins to use
+               const uint32_t incrcng_cntr  //
+               ) {
+    
+    uint32_t scaled_time = (current_time >> clock_scale);
+    
+    //Fade in:
+    if ((scaled_time/pwm_steps)%2) { 
+        fakePWM(port,pin_mask,((scaled_time)%pwm_steps),pwm_steps,incrcng_cntr);
+    }
+    //Fade out:
+    else {
+        fakePWM(port,pin_mask,pwm_steps-((scaled_time)%pwm_steps),pwm_steps,incrcng_cntr); //fade out
+    }
+}
+
 
 
     
