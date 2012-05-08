@@ -48,6 +48,7 @@ TARGET = robotArmCntl
 SRC =	main.c \
 	pwm.c \
 	controlSystem.c \
+	sedRobotAPI.c \
 	interrupt_timer.c \
 	analog.c \
 	spi.c \
