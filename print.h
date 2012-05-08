@@ -2,7 +2,7 @@
 #define print_h__
 
 #include <avr/pgmspace.h>
-#include "usb_debug_only.h"
+#include "usb_rawhid.h"
 
 #ifdef PROGMEM 
 #undef PROGMEM 

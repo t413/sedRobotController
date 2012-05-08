@@ -47,12 +47,13 @@ TARGET = robotArmCntl
 # List C source files here. (C dependencies are automatically generated.)
 SRC =	main.c \
 	pwm.c \
+	controlSystem.c \
 	interrupt_timer.c \
 	analog.c \
-	usb_debug_only.c \
 	spi.c \
 	nrf24l01.c \
-	print.c 
+	usb_rawhid.c \
+	printf.c 
 
 # MCU name, you MUST set this to match the board you are using
 # type "make clean" after changing this, so all files will be rebuilt
