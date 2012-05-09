@@ -61,4 +61,6 @@ void sedAPI_send_angles(uint8_t pktID, Sed_move_angles_t* datas);
 void sedAPI_send_pkt(uint8_t pktID, uint8_t which, uint8_t* data, uint8_t length);
 void sedAPI_make_pkt(uint8_t* packet, uint8_t pktID, uint8_t pktType, uint8_t* data, uint8_t length);
 
+uint8_t sedAPI_is_pkt(const uint8_t * data);
+
 #endif

@@ -76,17 +76,16 @@ void sedAPI_make_pkt(uint8_t* packet, uint8_t pktID, uint8_t pktType, uint8_t* d
 /* -- receiving functions -- */
 /* --------------------------*/
 
-uint8_t sedAPI_is_pkt(uint8_t * data)
-{
+uint8_t sedAPI_is_pkt(const uint8_t * data) {
 	Sed_base_pkt_t* p = (Sed_base_pkt_t*)data;
 	
-    if ((p->start0 != START0) || (p->start1 != START1)) { return 2; } //error, downloaded packet header missmatch.
-    
-    if (p->length > 128) { return 4; } //error, packet too long.
+    if ((p->start0 != START0) || (p->start1 != START1)) { return 0; } //error, downloaded packet header missmatch.
+    if (p->length > 128) { return 0; } //error, packet too long.
     
 	uint8_t cksum0,cksum1;
-	sedAPI_checksum(pktID, pktType, length, data, &cksum0, &cksum1);
-	
+	sedAPI_checksum(p->pktID, p->pktType, p->length, &(p->data_start), &cksum0, &cksum1);
+	if (cksum0 != *(&(p->data_start) + p->length)) { return 0; } //compare 1st checksum
+	if (cksum1 != *(&(p->data_start) + p->length+1)) { return 0; } //compare 2nd checksum
     return 1;
 }
 

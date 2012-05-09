@@ -6,6 +6,7 @@
 #include <util/delay.h>
 #include "pwm.h"
 #include "usb_rawhid.h"
+#include "sedRobotAPI.h"
 #include "analog.h"
 #include "interrupt_timer.h"
 #include "spi.h"
@@ -68,7 +69,7 @@ int main(void) {
         svo[m].p = 13; svo[m].i = 0.8;
     } 
 
-	uint32_t lastCntl = 0, lastPrint = 0, lastMove = 4000;
+	uint32_t lastCntl = 0, lastPrint = 0;
     Mode mode = MEAS_RANGE;
 	while (1) {
         uint32_t t_tics = tics();
@@ -79,10 +80,7 @@ int main(void) {
             if ((current - lastPrint) > 100) { 
 				buffer[0] = 0xFF;
 				usb_rawhid_recv((uint8_t*)buffer,1);
-				if (buffer[0] != 0xFF) {
-					serialCommandRecieve(buffer,svo,current,&mode);
-                    usb_rawhid_send((uint8_t*)buffer, 5);
-				}
+				if (buffer[0] != 0xFF) { serialCommandRecieve(buffer,svo,current,&mode); }
                 for (uint8_t m = 0; m < 6; m++) {
                     uint16_t val = analogRead(m);
                     if (val == 1023) continue;
@@ -113,14 +111,14 @@ int main(void) {
             lastCntl = current;
         }
         
-        if (mode == MEAS_RANGE) {
+        /*if (mode == MEAS_RANGE) {
             for (uint8_t m = 0; m < 6; m++) {
                 uint16_t val = analogRead(m);
                 if (val > svo[m].max_p) { svo[m].max_p = val; }
                 else if (val < svo[m].min_p) { svo[m].min_p = val; }
                 newPosition( val, 1000, &(svo[m]), current);
             }
-        }
+        }*/
         
         
         //fancy LED output
@@ -208,11 +206,33 @@ void fadingLED(
 
 
 void serialCommandRecieve(char* buf, ServoMotion* svo, uint32_t current, Mode* mode) {
-	if (!strcmp(buf,"mode")) {
+	if (sedAPI_is_pkt((uint8_t*)buf)) { //packet passes checksum, etc
+		Sed_base_pkt_t* pkt = (Sed_base_pkt_t*) buffer;
+		
+		//process different packet types:
+		if (pkt->pktType == SED_MOVE_ANGLES){
+			Sed_move_angles_t* rec = (Sed_move_angles_t*) &pkt->data_start;
+			for (uint8_t m=0; m<6; m++) {
+				if ((rec->which_en >> m) & 0x01) { //this chanel is enabled by the mask
+					newPosition(rec->angles[m], rec->duration, &(svo[m]), current);
+				}
+			}
+		}
+		else if (pkt->pktType == SED_ENABLE_DRIVE){ *mode = POSITION; }
+		else if (pkt->pktType == SED_DISABLE_DRIVE){ *mode = MEAS_RANGE; }
+		else if (pkt->pktType == SED_SET_CONF_MIN){ 
+			for (uint8_t m = 0; m < 6; m++) { svo[m].min_p = analogRead(m); }
+		} else if (pkt->pktType == SED_SET_CONF_MAX){ 
+			for (uint8_t m = 0; m < 6; m++) { svo[m].max_p = analogRead(m); }
+		}
+
+	}
+	
+	/*if (!strcmp(buf,"mode")) {
 		(*mode) = (*mode + 1) % NUM_MODES;
 	} else if (!strcmp(buf,"help")) {
 		stringf(buffer,"Hello Tim\n"); usb_rawhid_send((uint8_t*)buffer, 50);
-	}
+	}*/
 }
 
     
